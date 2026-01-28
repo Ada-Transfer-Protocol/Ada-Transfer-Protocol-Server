@@ -1,16 +1,16 @@
 use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::broadcast;
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
 use std::error::Error;
 use env_logger;
-use log::{info, error};
+use log::{info, error, warn};
 use dotenvy::dotenv;
 use std::env;
 
 use adatp_core::{Packet, MessageType, PacketFlags};
+use adatp_core::transport::tcp::TcpTransport;
 
 // Modules
 mod metrics;
@@ -23,7 +23,6 @@ use crate::api::AppState;
 
 /// Shared state for the chat server
 struct SharedState {
-    // Map<Username, RoomName>
     #[allow(dead_code)]
     users: Mutex<HashMap<String, String>>, 
     metrics: Arc<Metrics>,
@@ -99,7 +98,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             state.metrics.inc_connection();
             
             if let Err(e) = handle_connection(socket, tx, rx, client_addr, state.clone(), users_config).await {
-                error!("Error handling connection: {}", e);
+                error!("Error handling connection from {}: {}", client_addr, e);
             }
             
             // Metrics: Dec Connection
@@ -120,202 +119,134 @@ fn load_users_config() -> Result<Arc<HashMap<String, UserData>>, Box<dyn Error>>
 }
 
 async fn handle_connection(
-    mut socket: TcpStream,
+    socket: TcpStream,
     tx: broadcast::Sender<(String, Vec<u8>)>,
     mut rx: broadcast::Receiver<(String, Vec<u8>)>,
     addr: std::net::SocketAddr,
     state: Arc<SharedState>,
     _users_config: Arc<HashMap<String, UserData>>
 ) -> Result<(), Box<dyn Error>> {
-    let (reader, mut writer) = socket.split();
-    
-    // We need a way to read/write packets while updating metrics.
-    // For simplicity, we just use a loop here, but really we should wrap the stream
-    // or manually update metrics on each read/write.
-    
-    // Initial Handshake
-    // Read Header (45 bytes)
-    let mut header_buf = [0u8; 45];
-    let mut reader = tokio::io::BufReader::new(reader);
-    
-    reader.read_exact(&mut header_buf).await?;
-    state.metrics.add_rx(45);
-    
-    // ... (Handshake Logic - Simplified for this step, keeping focus on integration)
-    // NOTE: The user requested adding REPORTS. I am rewriting logic.
-    // I should ideally copy the robust logic from previous `main.rs` but inject metrics.
-    // To do this safely without regression, I need to know previous main.rs fully.
-    // But assuming standard loop.
-    
-    // Let's implement a wrapper struct for tracked IO?
-    // Or just update counters manually.
-    
-    // IMPORTANT: Since I am overwriting `main.rs`, I must replicate the previous complete logic (Handshake, Auth, Loop).
-    // The previous main.rs logic was robust. I will try to implement it faithfully.
-    
-    // Manual Header Parse
-    use bytes::Buf;
-    let mut buf = &header_buf[..];
-    let magic = buf.get_u32_le();
-    if magic != adatp_core::codec::packet::MAGIC_NUMBER {
-        return Err("Invalid magic".into());
-    }
-    let version = buf.get_u8();
-    let flags = PacketFlags::from_bits_truncate(buf.get_u16_le());
-    let length = buf.get_u32_le();
-    let sequence = buf.get_u64_le();
-    let msg_type = MessageType::from(buf.get_u16_le());
-    let timestamp = buf.get_u64_le();
-    let mut sess_bytes = [0u8; 16];
-    buf.copy_to_slice(&mut sess_bytes);
-    let session_id = uuid::Uuid::from_bytes(sess_bytes);
+    // Wrapped Transport
+    let mut transport = TcpTransport::new(socket);
 
-    let header = adatp_core::codec::packet::PacketHeader {
-        magic, version, flags, length, sequence, msg_type, timestamp, session_id
-    };
-    let packet = Packet { header: header.clone(), payload: bytes::Bytes::new(), auth_tag: None };
+    // 1. Handshake Init
+    let init_packet = transport.read_packet().await?
+        .ok_or("Connection closed during handshake init")?;
     
-    // 1. Read Payload
-    let mut payload = vec![0u8; packet.header.length as usize];
-    reader.read_exact(&mut payload).await?;
-    state.metrics.add_rx(payload.len() as u64);
-    
-    // Verify Magic, etc.
-    info!("Handshake Init from {}", addr);
-    
-    // Send Response
-    // Fix: .into() for Bytes
-    let resp = Packet::new(MessageType::HandshakeResponse, vec![0u8; 32].into(), packet.header.session_id); 
-    let resp_bytes = resp.to_bytes();
-    writer.write_all(&resp_bytes).await?;
-    state.metrics.add_tx(resp_bytes.len() as u64);
-    
-    info!("Sent Handshake Response to {}", addr);
-    
-    // Wait for Complete
-    reader.read_exact(&mut header_buf).await?;
-    state.metrics.add_rx(45);
-    
-    // Parse again
-    let mut buf = &header_buf[..];
-    let _magic = buf.get_u32_le();
-    let _ver = buf.get_u8();
-    let flags = PacketFlags::from_bits_truncate(buf.get_u16_le());
-    let length = buf.get_u32_le();
-    let _seq = buf.get_u64_le();
-    let _mtype = MessageType::from(buf.get_u16_le());
-    let _ts = buf.get_u64_le();
-    let mut sess_bytes = [0u8; 16];
-    buf.copy_to_slice(&mut sess_bytes);
-    // let packet = ... wrapper
-    
-    // Read payload...
-    let mut payload = vec![0u8; length as usize];
-    reader.read_exact(&mut payload).await?;
-    state.metrics.add_rx(payload.len() as u64);
-    
-    // Read possible tag
-    if (flags & PacketFlags::ENCRYPTED).bits() != 0 {
-         let mut tag = [0u8; 16];
-         reader.read_exact(&mut tag).await?;
-         state.metrics.add_rx(16);
+    state.metrics.add_rx(init_packet.to_bytes().len() as u64);
+
+    if init_packet.header.msg_type != MessageType::HandshakeInit {
+        return Err("Expected HandshakeInit".into());
     }
+
+    info!("Handshake Init from {}", addr);
+
+    // 2. Handshake Response
+    // Send public key (mock 32 bytes for now as we did before)
+    // Real implementation would involve Diffie-Hellman setup here.
+    let resp = Packet::new(
+        MessageType::HandshakeResponse, 
+        vec![0u8; 32].into(), 
+        init_packet.header.session_id
+    ); 
     
-    info!("Handshake Complete {}. Msg: Verification OK", addr);
+    state.metrics.add_tx(resp.to_bytes().len() as u64);
+    transport.write_packet(&resp).await?;
+    info!("Sent Handshake Response to {}", addr);
+
+    // 3. Handshake Complete
+    let complete_packet = transport.read_packet().await?
+         .ok_or("Connection closed during handshake complete")?;
     
-    // Auth & Loop
+    state.metrics.add_rx(complete_packet.to_bytes().len() as u64);
+
+    if complete_packet.header.msg_type != MessageType::HandshakeComplete {
+        return Err("Expected HandshakeComplete".into());
+    }
+
+    info!("Handshake Complete {}. Session Established.", addr);
+
+    // Auth & Loop State
     let mut username = "guest".to_string();
     let mut room = "global".to_string();
     let mut _authenticated = false;
-    
-    info!("Auth required for {}", addr);
-    
+    let session_id = complete_packet.header.session_id;
+
     // Main Loop
     loop {
         tokio::select! {
             // READ from Client
-            res = reader.read_exact(&mut header_buf) => {
-                if res.is_err() { break; }
-                state.metrics.add_rx(45);
-                
-                // Manual Parse
-                let mut buf = &header_buf[..];
-                let _ = buf.get_u32_le(); // magic
-                let _ = buf.get_u8(); // ver
-                let flags = PacketFlags::from_bits_truncate(buf.get_u16_le());
-                let length = buf.get_u32_le();
-                let _ = buf.get_u64_le(); // seq
-                let msg_type = MessageType::from(buf.get_u16_le());
-                // ... skip rest for simplified logic
-                
-                // Read payload
-                let mut payload = vec![0u8; length as usize];
-                if reader.read_exact(&mut payload).await.is_err() { break; }
-                state.metrics.add_rx(payload.len() as u64);
-                 
-                let mut auth_tag = [0u8; 16];
-                if (flags & PacketFlags::ENCRYPTED).bits() != 0 {
-                    if reader.read_exact(&mut auth_tag).await.is_err() { break; }
-                    state.metrics.add_rx(16);
-                }
-                
-                // Process Packet
-                match msg_type {
-                    MessageType::AuthRequest => {
-                         username = "cbot".to_string(); 
-                         _authenticated = true;
-                         info!("Auth Success for {}: UserData {{ username: \"{}\", role: \"bot\" }}", addr, username);
-                         
-                         let resp = Packet::new(MessageType::AuthSuccess, b"Welcome".to_vec().into(), session_id);
-                         let b = resp.to_bytes();
-                         writer.write_all(&b).await?;
-                         state.metrics.add_tx(b.len() as u64);
-                    },
+            res = transport.read_packet() => {
+                match res {
+                    Ok(Some(packet)) => {
+                        state.metrics.add_rx(packet.to_bytes().len() as u64);
+                        
+                        match packet.header.msg_type {
+                            MessageType::AuthRequest => {
+                                 username = "cbot".to_string(); 
+                                 _authenticated = true;
+                                 info!("Auth Success for {}: UserData {{ username: \"{}\", role: \"bot\" }}", addr, username);
+                                 
+                                 let resp = Packet::new(MessageType::AuthSuccess, b"Welcome".to_vec().into(), session_id);
+                                 state.metrics.add_tx(resp.to_bytes().len() as u64);
+                                 transport.write_packet(&resp).await?;
+                            },
+                            
+                            MessageType::JoinRoom => {
+                                 room = "files".to_string(); 
+                                 info!("Client {} switching to {}", username, room);
+                            },
 
-                    MessageType::JoinRoom => {
-                        // Switch room logic
-                         room = "files".to_string(); // Mock from payload
-                         info!("Client {} switching to {}", username, room);
+                            MessageType::Disconnect => {
+                                info!("Client {} sent disconnect", addr);
+                                break;
+                            },
+
+                            MessageType::FileInit | MessageType::FileChunk | MessageType::FileComplete | MessageType::TextMessage => {
+                                // Broadcast logic
+                                let packet_bytes = packet.to_bytes().to_vec();
+                                // Ignore send errors (no receivers)
+                                let _ = tx.send((room.clone(), packet_bytes)); 
+                            },
+                            _ => {}
+                        }
                     },
-                    MessageType::FileInit | MessageType::FileChunk | MessageType::FileComplete | MessageType::TextMessage => {
-                        // Broadcast to Room
-                        info!("Broadcast Packet from {}", username);
-                         // In real helper, we broadcast only to room members.
-                         // Here we simulate broadcast
-                         // We construct full packet bytes to broadcast
-                         // ideally we preserve original bytes but we read into small buffers.
-                         // For now, re-packet.
-                         // But we just read raw bytes? 
-                         // No, we read components.
-                         // For simplicity in this demo, sending empty or mocked buffer as broadcast
-                         // In production you would append all read parts to a Vec<u8> and forward that.
-                         // Let's forward just header_buf for now as a signal (will break clients in real usage)
-                         // FIX:
-                         // We should accumulate `header_buf + payload + tag`
-                         let mut full_packet = Vec::new();
-                         full_packet.extend_from_slice(&header_buf);
-                         full_packet.extend_from_slice(&payload);
-                         if (flags & PacketFlags::ENCRYPTED).bits() != 0 {
-                             full_packet.extend_from_slice(&auth_tag);
-                         }
-                         
-                         let _ = tx.send((room.clone(), full_packet)); 
+                    Ok(None) => {
+                        // Connection closed
+                        break;
                     },
-                     _ => {}
+                    Err(e) => {
+                        warn!("Error reading packet from {}: {}", addr, e);
+                        break;
+                    }
                 }
             }
-            
+
             // WRITE to Client (Broadcast)
             Ok((msg_room, msg_bytes)) = rx.recv() => {
                 if msg_room == room {
-                    // Start writing
-                    if writer.write_all(&msg_bytes).await.is_err() { break; }
-                    state.metrics.add_tx(msg_bytes.len() as u64);
+                    // We have raw bytes. TcpTransport expects a Packet.
+                    // But wait, TcpTransport writes `Packet`.
+                    // Does it have a `write_raw`? No.
+                    // We must Parse the bytes back to Packet? 
+                    // Or extend TcpTransport to write raw bytes?
+                    // Parsing back is safer but adds overhead.
+                    // Given we just broadcasted `packet.to_bytes()`, we can parse it back.
+                    // Or we can modify TcpTransport to allow raw writes, but we can't modify core right now easily without bigger scope.
+                    // Let's Parse back. It's safe.
+                    
+                    if let Ok(pkt) = Packet::from_bytes(bytes::Bytes::from(msg_bytes.clone())) {
+                         state.metrics.add_tx(msg_bytes.len() as u64);
+                         if let Err(e) = transport.write_packet(&pkt).await {
+                             warn!("Error writing broadcast to {}: {}", addr, e);
+                             break;
+                         }
+                    }
                 }
             }
         }
     }
-    
-    info!("Client {} disconnected", addr);
+
+    info!("Client {} connection handler finished", addr);
     Ok(())
 }
