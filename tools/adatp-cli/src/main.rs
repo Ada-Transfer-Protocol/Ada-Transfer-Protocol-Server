@@ -12,6 +12,12 @@ use clap::Parser;
 struct Args {
     #[arg(short, long, default_value = "127.0.0.1:3000")]
     address: String,
+
+    #[arg(short, long)]
+    username: Option<String>,
+
+    #[arg(short, long)]
+    password: Option<String>,
 }
 
 #[tokio::main]
@@ -19,7 +25,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     println!("Connecting to {}...", args.address);
 
-    let stream = TcpStream::connect(args.address).await?;
+    let stream = TcpStream::connect(&args.address).await?;
     let mut transport = TcpTransport::new(stream);
 
     // 1. Generate Client Keypair
@@ -47,20 +53,18 @@ async fn main() -> Result<()> {
     if server_pub_key.len() != 32 {
         return Err(anyhow!("Invalid server public key length"));
     }
-    println!("Received HANDSHAKE_RESPONSE (Server Public Key: {:?})", &server_pub_key[0..4]);
+    println!("Received HANDSHAKE_RESPONSE");
 
-    // 4. Compute Shared Secret
+    // 4. Compute Shared Secret & Keys
     let shared_secret = diffie_hellman(client_keys.secret, &server_pub_key)
         .map_err(|e| anyhow!("DH Error: {:?}", e))?;
-
-    // Derive Session Keys (HKDF)
     let session_keys = adatp_core::crypto::key_derivation::SessionKeys::derive(&shared_secret, &[0u8; 32]);
     let mut secure_session = adatp_core::session::secure_session::SecureSession::new(
         adatp_core::session::secure_session::Role::Client, 
         session_keys
     );
 
-    // 5. Send HANDSHAKE_COMPLETE (Encrypted)
+    // 5. Send HANDSHAKE_COMPLETE
     let msg = b"Verification OK";
     let (ciphertext, tag, seq) = secure_session.encrypt(msg)
         .map_err(|e| anyhow!("Encryption error: {:?}", e))?;
@@ -75,43 +79,54 @@ async fn main() -> Result<()> {
     complete_packet.auth_tag = Some(tag);
     
     transport.write_packet(&complete_packet).await?;
-    println!("Sent HANDSHAKE_COMPLETE");
+    println!("Sent HANDSHAKE_COMPLETE -> Secure Session Established 🔒");
 
-    // 6. Send a Text Message
-    let text = b"Hello from Rust Client!";
-    let (cipher_text, tag_text, seq_text) = secure_session.encrypt(text)
-        .map_err(|e| anyhow!{"Encryption error: {:?}", e})?;
+    // 6. Login (Optional)
+    if let (Some(u), Some(p)) = (args.username, args.password) {
+        println!("Attempting Login as '{}'...", u);
         
-    let mut msg_packet = Packet::new(
-        MessageType::TextMessage,
-        Bytes::from(cipher_text),
-        response_packet.header.session_id
-    );
-    msg_packet.header.flags = PacketFlags::ENCRYPTED;
-    msg_packet.header.sequence = seq_text;
-    msg_packet.auth_tag = Some(tag_text);
-    
-    transport.write_packet(&msg_packet).await?;
-    println!("Sent Text Message");
-
-    // 7. Receive Echo
-    let echo = transport.read_packet().await?
-        .ok_or(anyhow!("Connection closed during echo"))?;
+        let login_json = serde_json::json!({
+            "username": u,
+            "password": p,
+            "device_id": "cli-tool"
+        });
         
-    if echo.header.flags.contains(PacketFlags::ENCRYPTED) {
-        let decrypted = secure_session.decrypt(&echo)
-            .map_err(|e| anyhow!("Decryption failed: {:?}", e))?;
-        println!("Received Echo: {} (Seq: {})", String::from_utf8_lossy(&decrypted), echo.header.sequence);
+        let login_bytes = serde_json::to_vec(&login_json)?;
+        let (cipher, tag, seq) = secure_session.encrypt(&login_bytes)?;
+        
+        let mut login_pkt = Packet::new(
+            MessageType::LoginRequest,
+            Bytes::from(cipher),
+            response_packet.header.session_id
+        );
+        login_pkt.header.flags = PacketFlags::ENCRYPTED;
+        login_pkt.header.sequence = seq;
+        login_pkt.auth_tag = Some(tag);
+        
+        transport.write_packet(&login_pkt).await?;
+        
+        // Wait for LoginResponse
+        let resp = transport.read_packet().await?
+             .ok_or(anyhow!("Closed during login"))?;
+             
+        if resp.header.msg_type == MessageType::LoginResponse {
+             let decrypted = secure_session.decrypt(&resp)?;
+             println!("✅ Login Response: {}", String::from_utf8_lossy(&decrypted));
+        } else {
+             println!("❌ Expected LoginResponse, got {:?}", resp.header.msg_type);
+        }
+    } else {
+        println!("Skipping Login (No credentials provided)");
     }
 
-    // 8. Disconnect
+    // 7. Disconnect
     let disconnect = Packet::new(
         MessageType::Disconnect,
         Bytes::new(),
         response_packet.header.session_id
     );
     transport.write_packet(&disconnect).await?;
-    println!("Sent DISCONNECT");
+    println!("Disconnected.");
 
     Ok(())
 }
