@@ -137,10 +137,10 @@ Integrate AdaTP into your applications using our official SDKs.
 | Language | Repository | Status |
 | :--- | :--- | :--- |
 | **JavaScript / Web** | [SDK-JS](https://github.com/Ada-Transfer-Protocol/SDK-JS) | ✅ Stable |
-| **Node.js** | [SDK-NodeJS](https://github.com/Ada-Transfer-Protocol/SDK-NodeJS) | 🚧 Beta |
-| **Python** | [SDK-Python](https://github.com/Ada-Transfer-Protocol/SDK-Python) | 🚧 Development |
-| **PHP** | [SDK-PHP](https://github.com/Ada-Transfer-Protocol/SDK-PHP) | 🚧 Development |
-| **C / Embedded** | [SDK-C](https://github.com/Ada-Transfer-Protocol/SDK-C) | 🚧 Development |
+| **Node.js** | [SDK-NodeJS](https://github.com/Ada-Transfer-Protocol/SDK-NodeJS) | ✅ Stable |
+| **Python** | [SDK-Python](https://github.com/Ada-Transfer-Protocol/SDK-Python) | ✅ Stable |
+| **PHP** | [SDK-PHP](https://github.com/Ada-Transfer-Protocol/SDK-PHP) | ✅ Stable |
+| **C / Embedded** | [SDK-C](https://github.com/Ada-Transfer-Protocol/SDK-C) | ✅ Stable |
 
 ### JavaScript SDK Features
 The Web SDK supports `AdaTPPhone` (VoIP), `AdaTPChat` (Messaging), and `AdaTPConference` with a low-code config pattern.
