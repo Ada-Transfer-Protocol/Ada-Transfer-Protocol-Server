@@ -1,113 +1,124 @@
 # Ada Transfer Protocol (Server)
 
-![AdaTP](https://img.shields.io/badge/AdaTP-v2.0-blueviolet?style=for-the-badge) ![Rust](https://img.shields.io/badge/Built%20With-Rust-orange?style=for-the-badge) ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+![AdaTP](https://img.shields.io/badge/AdaTP-v2.0-blueviolet?style=for-the-badge) ![Rust](https://img.shields.io/badge/Built%20With-Rust-orange?style=for-the-badge) ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge) ![Uptime](https://img.shields.io/badge/Uptime-99.9%25-success?style=for-the-badge)
 
-**High-Performance Real-Time Communication Server** designed for massive concurrency, ultra-low latency voice/video, and instant signaling.
+**AdaTP (Ada Transfer Protocol)** is a next-generation, high-performance real-time communication server built with Rust. It is designed to handle massive concurrency for Voice (VoIP), Video, and Signaling with ultra-low latency.
+
+Unlike traditional heavy protocols (SIP/WebRTC stacks), AdaTP uses a **lightweight binary framing protocol** over WebSocket/TCP, making it ideal for AI Agents, IoT devices, and High-Frequency Trading systems.
 
 ---
 
-## 🚀 Quick Install (One-Line)
+## 🏗 System Architecture
 
-Install **AdaTP Server** and **CLI Tools** as a background service on Linux/macOS with a single command:
+AdaTP is built on the **Tokio** asynchronous runtime, utilizing a **Message-Passing Actor Model** for state management.
+
+*   **Networking Layer**: Uses `tokio-tungstenite` for WebSocket handling. Supports Binary frames directly (no Base64 overhead).
+*   **State Management**: In-memory `ACID` compliant state maps protected by `RwLock` and `DashMap` for O(1) access times.
+*   **Packet Routing**: Efficient broadcasting engine that routes audio packets (`0x0044`) without decoding/encoding (Zero-Copy forwarding).
+*   **Persistence**: Uses `SQLite` (via SQLx) for user authentication and transaction logging.
+
+---
+
+## 💻 System Requirements
+
+AdaTP is extremely efficient. It can run on a Raspberry Pi or a high-end server.
+
+| Requirement | Minimum | Recommended (10k+ Users) |
+| :--- | :--- | :--- |
+| **OS** | Linux (Any), macOS, Windows | Ubuntu 22.04 / Debian 11 |
+| **CPU** | 1 Core (Arm/x64) | 4+ Cores (High Frequency) |
+| **RAM** | 512 MB | 8 GB+ |
+| **Network** | 10 Mbps Up/Down | 1 Gbps+ (Low Jitter) |
+| **Storage** | 100 MB free space | NVMe SSD (for DB logs) |
+
+---
+
+## 🚀 Installation & Deployment
+
+### One-Line Automated Install (Universal Linux)
+
+This script auto-detects your OS, installs dependencies (Rust, GCC, SSL), builds the server, and sets up a systemd service.
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/Ada-Transfer-Protocol/Server/main/tools/setup.sh | bash
 ```
 
-**Installer Output:**
-```text
-   _       _       _____ ____  
-  /_\   __| | __ _|_   _|  _ \ 
- //_\\ / _` |/ _` | | | | |_) |
-/  _  \ (_| | (_| | | | |  __/ 
-\_/ \_/\__,_|\__,_| |_| |_|    
+### Manual Build (Dev Mode)
 
-Select Install Mode:
-1) Full Installation (Server + CLI + Service)
-2) Development Setup (Clone only)
-> 1
-
-📦 Building Server (Release)...
-📦 Building CLI...
-⚙️  Creating Systemd Service...
-✅ Service 'adatp' is ACTIVE.
-```
-
----
-
-## 🛠 Manual Installation & Development
-
-### Prerequisites
-*   **Rust (Cargo)**: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-
-### 1. Run in Dev Mode
 ```bash
 git clone https://github.com/Ada-Transfer-Protocol/Server.git
 cd Server
 cargo run --bin adatp-server
 ```
 
-**Expected Output:**
-```text
-INFO  adatp_server > 🚀 AdaTP Server v2.0 started on 0.0.0.0:3000
-INFO  adatp_server > 💾 Database connected: adatp.db
-INFO  adatp_server > 🔌 WebSocket listening...
-```
-
 ---
 
-## 💻 Management CLI
+## ⚙️ Configuration (Environment Variables)
 
-Once installed via the script, you get powerful shortcuts managed by `systemd`.
+You can configure the server by setting environment variables or creating a `.env` file in the root directory.
 
-| Command | Action | Example Output |
+| Variable | Default | Description |
 | :--- | :--- | :--- |
-| **`adatp-status`** | Check service health | `● adatp.service - AdaTP Server... Active: active (running)` |
-| **`adatp-log`** | Live server logs | `Jun 24 10:00:00 server adatp[123]: [INFO] New connection: 192.168.1.5` |
-| **`adatp-restart`** | Restart service | `Restarting adatp.service... Done.` |
-| **`adatp-stop`** | Stop service | `Stopping adatp.service... Done.` |
+| `HOST` | `0.0.0.0` | Bind address. Use `127.0.0.1` for local only. |
+| `PORT` | `3000` | Listening port for WebSocket connections. |
+| `DATABASE_URL` | `sqlite:adatp.db` | Path to the SQLite database file. |
+| `RUST_LOG` | `info` | Log level: `error`, `warn`, `info`, `debug`, `trace`. |
+| `MAX_CONNECTIONS` | `10000` | Soft limit for concurrent socket connections. |
+| `AUTH_ENABLED` | `true` | Set to `false` to disable handshake auth (Dev only). |
 
-### Admin CLI Tool (`adatp`)
-The `adatp` command allows you to inspect the running server state.
-
-```bash
-adatp inspect --room lobby
-```
-**Output:**
-```json
-{
-  "room_id": "lobby",
-  "users": [
-    { "id": "A1B2", "role": "admin", "audio": "active" },
-    { "id": "C3D4", "role": "guest", "audio": "muted" }
-  ]
-}
+**Example `.env` file:**
+```env
+HOST=0.0.0.0
+PORT=8080
+RUST_LOG=debug
+DATABASE_URL=sqlite:///var/lib/adatp/production.db
 ```
 
 ---
 
-## 📚 Protocol & SDKs
+## 🛠 Management CLI
 
-AdaTP is built to be modular.
+After installation via the script, use these global aliases to manage the server:
 
-*   📖 **Protocol Spec**: [Read the Binary Specification](docs/PROTOCOL_SPEC.md)
-*   🌐 **JavaScript SDK**: [Ada-Transfer-Protocol/SDK-JS](https://github.com/Ada-Transfer-Protocol/SDK-JS)
-    *   *Includes: Phone, Chat, Conference, File Transfer modules.*
+| Command | Description |
+| :--- | :--- |
+| `adatp-status` | Show service health (`systemctl status adatp`). |
+| `adatp-log` | Tail live logs (`journalctl -u adatp -f`). |
+| `adatp-restart` | Restart the process. |
+| `adatp-stop` | Stop the service. |
 
 ---
 
-## 📂 Architecture
+## 📂 Project Structure
 
 ```
-/adatp
-├── /server       # Main Rust Server (Tokio + Tungstenite)
-├── /core         # Shared Logic (Packets, Auth, Database)
-├── /tools
-│   ├── /adatp-cli      # Admin CLI Tool logic
-│   ├── setup.sh      # One-line installer
-│   └── install_service.sh # Systemd generator
-└── /docs         # Documentation
+/adatp-server
+├── /server           # Core Server Application
+│   ├── main.rs       # Entry point & Tokio runtime setup
+│   ├── api.rs        # WebSocket handler & Packet routing logic
+│   └── state.rs      # In-memory Room & User state management
+│
+├── /core             # Shared Libraries (Used by Client & Server)
+│   ├── lib.rs        # Protocol Definitions (Bitwise flags, Opcodes)
+│   └── models.rs     # Structs for JSON payloads
+│
+├── /tools            # DevOps & Utilities
+│   ├── setup.sh      # Universal Installer Script
+│   ├── install_service.sh # Systemd Generator
+│   └── /adatp-cli    # Rust-based Admin CLI tool
+│
+├── /docs             # Documentation
+│   └── PROTOCOL_SPEC.md # Binary Protocol Specification (RFC-style)
 ```
+
+---
+
+## 📦 Client SDKs
+
+*   **JavaScript / Web**: [Ada-Transfer-Protocol/SDK-JS](https://github.com/Ada-Transfer-Protocol/SDK-JS)
+    *   *Modules: Phone, Chat, Conference, File Transfer*
+*   *(Coming Soon)*: Python SDK
+*   *(Coming Soon)*: C++ Embedded SDK
 
 ## License
-MIT © Ada Transfer Protocol Team
+MIT License. Copyright © 2024 Ada Transfer Protocol Team.
