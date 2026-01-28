@@ -136,13 +136,16 @@ adatp-stop
 ```
 
 ### Admin Console
-Launch the interactive command-line interface to send test messages or inspect the server:
+Launch the interactive command-line interface to inspect the server:
 ```bash
-# Connect to local server (127.0.0.1:3000)
+# Connect to local server (Anonymous)
 adatp
 
-# Connect to remote server
-adatp --address 192.168.1.50:3000
+# Connect with Authentication
+adatp -u admin -p mypassword
+
+# Connect to remote server with credentials
+adatp --address 20.0.0.31:3000 --username alice --password secret
 ```
 
 ---
