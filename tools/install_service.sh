@@ -113,7 +113,7 @@ grep -q "alias adatp-status=" "$SHELL_RC" || echo "alias adatp-status='systemctl
 echo "🎨 Configuring SSH Welcome Message..."
 MOTD_FILE="/etc/profile.d/99-adatp-motd.sh"
 
-cat > $MOTD_FILE <<EOF
+cat > \$MOTD_FILE <<'EOF'
 #!/bin/bash
 # AdaTP Welcome Screen
 
@@ -126,6 +126,9 @@ if [ -n "\$PS1" ]; then
     echo '/  _  \ (_| | (_| | | | |  __/ '
     echo ' \_/ \_/\__,_|\__,_| |_| |_|    '
     echo -e "\033[0m"
+EOF
+
+cat >> \$MOTD_FILE <<EOF
     
     # Check Status
     if systemctl is-active --quiet adatp-server; then
