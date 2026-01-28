@@ -71,6 +71,7 @@ You can delegate authentication to your custom backend (e.g. PHP/Node.js/Python)
 
 Add this to your `.env` file:
 ```env
+AUTH_DRIVER=api
 AUTH_API_URL=https://api.myapp.com/v1/verify_user
 ```
 
