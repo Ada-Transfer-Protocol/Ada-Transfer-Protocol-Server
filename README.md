@@ -116,17 +116,34 @@ You can configure the server by setting environment variables or creating a `.en
 
 ---
 
-## 🛠 Management CLI
+## 🛠 Management CLI (Ubuntu / Debian / RHEL)
 
-After installation via the script, use these global aliases to manage the server:
+After installation, use these global commands to manage the server:
 
-| Command | Description |
-| :--- | :--- |
-| `adatp-status` | Show service health (`systemctl status adatp-server`). |
-| `adatp-log` | Tail live logs (`journalctl -u adatp-server -f`). |
-| `adatp-restart` | Restart the process. |
-| `adatp-stop` | Stop the service. |
-| `adatp` | Launch the **Interactive Admin CLI**. |
+### Service Control
+```bash
+# Check Server Status (Active/Inactive)
+adatp-status
+
+# View Live Logs (Real-time)
+adatp-log
+
+# Restart Server (Apply config changes)
+adatp-restart
+
+# Stop Server
+adatp-stop
+```
+
+### Admin Console
+Launch the interactive command-line interface to send test messages or inspect the server:
+```bash
+# Connect to local server (127.0.0.1:3000)
+adatp
+
+# Connect to remote server
+adatp --address 192.168.1.50:3000
+```
 
 ---
 
