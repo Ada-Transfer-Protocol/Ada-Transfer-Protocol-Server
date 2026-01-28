@@ -116,7 +116,7 @@ grep -q "99-adatp-motd.sh" "$SHELL_RC" || echo "[ -f /etc/profile.d/99-adatp-mot
 echo "🎨 Configuring SSH Welcome Message..."
 MOTD_FILE="/etc/profile.d/99-adatp-motd.sh"
 
-cat > \$MOTD_FILE <<'EOF'
+cat > $MOTD_FILE <<'EOF'
 #!/bin/bash
 # AdaTP Welcome Screen
 
@@ -131,7 +131,7 @@ if [ -n "\$PS1" ]; then
     echo -e "\033[0m"
 EOF
 
-cat >> \$MOTD_FILE <<EOF
+cat >> $MOTD_FILE <<EOF
     
     # --- Configuration Data ---
     IP_ADDR=\$(hostname -I | cut -d' ' -f1)
