@@ -59,6 +59,48 @@ curl -sSL https://raw.githubusercontent.com/Ada-Transfer-Protocol/Server/main/to
 
 ---
 
+## 🔐 Authentication & Security
+
+AdaTP supports two authentication modes:
+
+### 1. Internal Database (Default)
+Users are managed via the internal SQLite database (`adatp.db`).
+
+### 2. External API Integration (Webhook)
+You can delegate authentication to your custom backend (e.g. PHP/Node.js/Python).
+
+Add this to your `.env` file:
+```env
+AUTH_API_URL=https://api.myapp.com/v1/verify_user
+```
+
+**Request (AdaTP -> Your API)**:
+```json
+POST /v1/verify_user
+{
+  "username": "alice",
+  "password": "user_provided_password"
+}
+```
+
+**Response (Your API -> AdaTP)**:
+```json
+// Success
+{
+  "authorized": true,
+  "user_id": "uuid-5566",   // Used as PeerID
+  "role": "admin"           // Optional
+}
+
+// Failure
+{
+  "authorized": false,
+  "error": "Invalid password"
+}
+```
+
+---
+
 ## ⚙️ Configuration (Environment Variables)
 
 You can configure the server by setting environment variables or creating a `.env` file in the root directory.
@@ -69,6 +111,7 @@ You can configure the server by setting environment variables or creating a `.en
 | `PORT` | `3000` | Listening port for WebSocket connections. |
 | `DATABASE_URL` | `sqlite:adatp.db` | Path to the SQLite database file. |
 | `RUST_LOG` | `info` | Log level: `error`, `warn`, `info`, `debug`, `trace`. |
+| `AUTH_API_URL` | (none) | URL for external auth webhook. |
 
 ---
 
@@ -92,14 +135,6 @@ Integrate AdaTP into your applications using our official SDKs.
 
 ### [JavaScript / Web SDK](https://github.com/Ada-Transfer-Protocol/SDK-JS)
 The official browser-based SDK supporting Phone, Chat, Conference, and File Transfer modules.
-
-*   **Repository**: [github.com/Ada-Transfer-Protocol/SDK-JS](https://github.com/Ada-Transfer-Protocol/SDK-JS)
-*   **Documentation**: [Read Full Docs](https://github.com/Ada-Transfer-Protocol/SDK-JS#readme)
-*   **Features**:
-    *   `AdaTPPhone` (1-on-1 VoIP)
-    *   `AdaTPChat` (Real-time Messaging)
-    *   `AdaTPConference` (Group Voice Rooms)
-    *   Low-Code `config` integration.
 
 ---
 
