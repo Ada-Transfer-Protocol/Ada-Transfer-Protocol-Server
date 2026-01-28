@@ -134,8 +134,16 @@ After installation via the script, use these global aliases to manage the server
 
 Integrate AdaTP into your applications using our official SDKs.
 
-### [JavaScript / Web SDK](https://github.com/Ada-Transfer-Protocol/SDK-JS)
-The official browser-based SDK supporting Phone, Chat, Conference, and File Transfer modules.
+| Language | Repository | Status |
+| :--- | :--- | :--- |
+| **JavaScript / Web** | [SDK-JS](https://github.com/Ada-Transfer-Protocol/SDK-JS) | ✅ Stable |
+| **Node.js** | [SDK-NodeJS](https://github.com/Ada-Transfer-Protocol/SDK-NodeJS) | 🚧 Beta |
+| **Python** | [SDK-Python](https://github.com/Ada-Transfer-Protocol/SDK-Python) | 🚧 Development |
+| **PHP** | [SDK-PHP](https://github.com/Ada-Transfer-Protocol/SDK-PHP) | 🚧 Development |
+| **C / Embedded** | [SDK-C](https://github.com/Ada-Transfer-Protocol/SDK-C) | 🚧 Development |
+
+### JavaScript SDK Features
+The Web SDK supports `AdaTPPhone` (VoIP), `AdaTPChat` (Messaging), and `AdaTPConference` with a low-code config pattern.
 
 ---
 
