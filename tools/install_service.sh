@@ -109,6 +109,40 @@ grep -q "alias adatp-restart=" "$SHELL_RC" || echo "alias adatp-restart='systemc
 grep -q "alias adatp-stop=" "$SHELL_RC" || echo "alias adatp-stop='systemctl stop adatp-server'" >> "$SHELL_RC"
 grep -q "alias adatp-status=" "$SHELL_RC" || echo "alias adatp-status='systemctl status adatp-server'" >> "$SHELL_RC"
 
+# 7. Add SSH Welcome Message (MOTD)
+echo "🎨 Configuring SSH Welcome Message..."
+MOTD_FILE="/etc/profile.d/99-adatp-motd.sh"
+
+cat > $MOTD_FILE <<EOF
+#!/bin/bash
+# AdaTP Welcome Screen
+
+# Only show on interactive shells
+if [ -n "\$PS1" ]; then
+    echo -e "\033[1;36m"
+    echo "   _       _       _____ ____  "
+    echo "  /_\   __| | __ _|_   _|  _ \ "
+    echo " //_\\\\ / _\` |/ _\` | | | | |_) |"
+    echo "/  _  \ (_| | (_| | | | |  __/ "
+    echo "\_/ \_/\__,_|\__,_| |_| |_|    "
+    echo -e "\033[0m"
+    
+    # Check Status
+    if systemctl is-active --quiet adatp-server; then
+        STATUS="\033[1;32mACTIVE\033[0m"
+    else
+        STATUS="\033[1;31mSTOPPED\033[0m"
+    fi
+    
+    echo -e " :: AdaTP Server ::    [ \$STATUS ]"
+    echo -e " :: Port         ::    [ 3000 ]"
+    echo -e " :: Monitor      ::    adatp-log"
+    echo ""
+fi
+EOF
+
+chmod +x $MOTD_FILE
+
 echo ""
 echo "🎉 Installation Complete!"
 echo "------------------------------------------------"
