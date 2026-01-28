@@ -42,10 +42,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
     env_logger::init();
     
-    // 1. Init Metrics (In-Memory)
+    // 1. Ini Broadcast Channel
+    let (tx, _rx) = broadcast::channel(100);
+
+    // 2. Init Metrics (In-Memory)
     let metrics = Arc::new(Metrics::new());
     
-    // 2. Init Database (SQLite) for API Keys
+    // 3. Init Database (SQLite) for API Keys
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:adatp.db".to_string());
     if !std::path::Path::new("adatp.db").exists() {
          std::fs::File::create("adatp.db")?; // Touch file for Sqlite
@@ -53,15 +56,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     
     let db_manager = Arc::new(DbManager::new(&db_url).await.expect("Failed to init DB"));
 
-    // 3. Start HTTP API Server
+    // 4. Start HTTP API Server
     let api_state = Arc::new(AppState {
         metrics: metrics.clone(),
         db: db_manager.clone(),
+        tx: tx.clone(), // Pass broadcast sender to API for WS
     });
     
     let app = api::create_router(api_state);
     let http_addr = "0.0.0.0:3000";
-    info!("HTTP API listening on {}", http_addr);
+    info!("HTTP API + WebSocket listening on {}", http_addr);
     
     // Spawn HTTP Server
     tokio::spawn(async move {
@@ -69,12 +73,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         axum::serve(listener, app).await.unwrap();
     });
 
-    // 4. Start TCP Chat Server
+    // 5. Start TCP Chat Server
     let addr = "0.0.0.0:8444";
     let listener = TcpListener::bind(addr).await?;
-    info!("Server listening on {}", addr);
-
-    let (tx, _rx) = broadcast::channel(100);
+    info!("TCP Server listening on {}", addr);
 
     let state = Arc::new(SharedState {
         users: Mutex::new(HashMap::new()),
@@ -275,12 +277,29 @@ async fn handle_connection(
                          room = "files".to_string(); // Mock from payload
                          info!("Client {} switching to {}", username, room);
                     },
-                    MessageType::FileInit | MessageType::FileChunk | MessageType::FileComplete => {
+                    MessageType::FileInit | MessageType::FileChunk | MessageType::FileComplete | MessageType::TextMessage => {
                         // Broadcast to Room
-                        info!("File Packet from {}", username);
+                        info!("Broadcast Packet from {}", username);
                          // In real helper, we broadcast only to room members.
                          // Here we simulate broadcast
-                         let _ = tx.send((room.clone(), header_buf.to_vec())); // Simplified
+                         // We construct full packet bytes to broadcast
+                         // ideally we preserve original bytes but we read into small buffers.
+                         // For now, re-packet.
+                         // But we just read raw bytes? 
+                         // No, we read components.
+                         // For simplicity in this demo, sending empty or mocked buffer as broadcast
+                         // In production you would append all read parts to a Vec<u8> and forward that.
+                         // Let's forward just header_buf for now as a signal (will break clients in real usage)
+                         // FIX:
+                         // We should accumulate `header_buf + payload + tag`
+                         let mut full_packet = Vec::new();
+                         full_packet.extend_from_slice(&header_buf);
+                         full_packet.extend_from_slice(&payload);
+                         if (flags & PacketFlags::ENCRYPTED).bits() != 0 {
+                             full_packet.extend_from_slice(&auth_tag);
+                         }
+                         
+                         let _ = tx.send((room.clone(), full_packet)); 
                     },
                      _ => {}
                 }
