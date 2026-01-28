@@ -1,0 +1,10 @@
+/target
+server.log
+/core/target
+/core/server.log
+
+/server/target
+/server/server.log
+
+adatp.db
+.env
