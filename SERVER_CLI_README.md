@@ -69,16 +69,28 @@ cargo build --release
 
 ---
 
-## 🛠️ 2. CLI (Adatp-CLI)
+---
+## 🛠️ 2. Admin CLI & Test Tool
 
-The CLI tool is used for testing connections, verifying the handshake implementation, and debugging.
+The project contains two CLI tools:
+1.  **Admin CLI:** For managing the server (API Keys, Stats) - located in `adatp-server`.
+2.  **Test Tool:** For testing the protocol connection - located in `tools/adatp-cli`.
 
-### Location
-Located in `adatp/tools/adatp-cli`.
+### A. Admin CLI (Management)
 
-### Usage
+Use this to manage API keys and view server statistics.
 
-You can run the CLI directly from the `adatp` workspace root or by navigating into the tool's directory.
+```bash
+# List API Keys
+cargo run -p adatp-server --bin adatp-cli -- auth list
+
+# Create a new API key
+cargo run -p adatp-server --bin adatp-cli -- auth create --description "New App"
+```
+
+### B. Test Tool (Connection & Protocol)
+
+Use this to test valid handshake and encryption flow.
 
 **From `adatp/` workspace root:**
 ```bash
@@ -86,12 +98,7 @@ You can run the CLI directly from the `adatp` workspace root or by navigating in
 cargo run -p adatp-cli -- -a 127.0.0.1:8444
 ```
 
-**From `adatp/tools/adatp-cli` directory:**
-```bash
-cargo run -- -a 127.0.0.1:8444
-```
-
-### Expected Output (Successful Test)
+### Expected Output (Test Tool)
 1.  **Handshake Init:** Sends public key (X25519) to server.
 2.  **Handshake Response:** Receives server public key.
 3.  **Encrypted Session:** Derives session keys and establishes AES-256-GCM channel.

@@ -83,13 +83,13 @@ Use the CLI to manage API keys and inspect the server.
 
 ```bash
 # 1. List API Keys (Direct DB Access)
-cargo run --bin adatp-cli -- auth list
+cargo run -p adatp-server --bin adatp-cli -- auth list
 
 # 2. Create New API Key
-cargo run --bin adatp-cli -- auth create --description "Dashboard App"
+cargo run -p adatp-server --bin adatp-cli -- auth create --description "Dashboard App"
 
 # 3. View Real-Time Stats
-cargo run --bin adatp-cli -- stats --key <YOUR_API_KEY>
+cargo run -p adatp-server --bin adatp-cli -- stats --key <YOUR_API_KEY>
 ```
 
 ---
